@@ -12,14 +12,16 @@ jobs:
           sudo apt-get install -y p7zip-full hfsprogs rsync cmake g++ libfuse3-dev libicu-dev libssl-dev libbz2-dev zlib1g-dev libattr1-dev liblzma-dev zstd
       - name: ensure hfsplus module
         run: |
+          set -x
+          sudo systemctl stop apt-daily.service apt-daily-upgrade.service unattended-upgrades.service || true
+          sudo systemctl disable --now unattended-upgrades.service || true
+          sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock || true
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get install -y --no-install-recommends -o DPkg::Lock::Timeout=600 linux-modules-extra-"$(uname -r)" || true
+          sudo depmod -a || true
           sudo modprobe hfsplus || true
-          if ! grep -q hfsplus /proc/filesystems; then
-            sudo apt-get install -y linux-modules-extra-$(uname -r) || true
-            sudo depmod -a || true
-            sudo modprobe hfsplus || true
-          fi
-          grep hfsplus /proc/filesystems || echo "HFS+ NOT AVAILABLE (will try anyway)"
-          uname -r
+          grep hfsplus /proc/filesystems || echo "HFS+ STILL MISSING"
+          ls /lib/modules/"$(uname -r)"/kernel/fs/ | head -30 || true
       - uses: actions/checkout@v4
         with:
           ref: sagit
