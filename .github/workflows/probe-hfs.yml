@@ -1,0 +1,22 @@
+name: probe-hfs
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: probe
+        run: |
+          set +e
+          echo "== uname =="; uname -r
+          echo "== /proc/filesystems hfs =="; grep -i hfs /proc/filesystems || echo none
+          echo "== modules dir =="; ls /lib/modules/ 2>/dev/null
+          echo "== find hfsplus.ko =="; find /lib/modules -name '*hfsplus*' 2>/dev/null | head
+          echo "== try modprobe =="; sudo modprobe hfsplus; echo "modprobe rc=$?"
+          echo "== apt candidates =="; apt-cache search linux-modules-extra 2>/dev/null | head -5
+          apt-cache policy linux-modules-extra-"$(uname -r)" 2>/dev/null | head -5
+          echo "== /dev/kvm =="; ls -l /dev/kvm 2>/dev/null || echo no-kvm
