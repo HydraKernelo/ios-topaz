@@ -1,0 +1,52 @@
+name: mkiosroot-sagit
+on:
+  workflow_dispatch:
+jobs:
+  root:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 300
+    steps:
+      - name: deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full hfsprogs rsync cmake g++ libfuse3-dev libicu-dev libssl-dev libbz2-dev zlib1g-dev libattr1-dev liblzma-dev zstd
+      - uses: actions/checkout@v4
+        with:
+          ref: sagit
+          fetch-depth: 1
+      - name: build apfs-fuse
+        run: |
+          git clone --depth 1 https://github.com/sgan81/apfs-fuse.git /tmp/apfs-fuse
+          cd /tmp/apfs-fuse
+          git submodule update --init --recursive || true
+          mkdir -p build && cd build
+          cmake .. > /tmp/cmake.log 2>&1 || (tail -50 /tmp/cmake.log; exit 1)
+          make -j"$(nproc)" > /tmp/make.log 2>&1 || (tail -80 /tmp/make.log; exit 1)
+          sudo cp apfs-fuse /usr/local/bin/
+          apfs-fuse --help | head -5
+      - name: download and extract IPSW
+        run: |
+          curl -L --retry 3 -o /tmp/ipsw.zip "https://updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw"
+          mkdir -p /tmp/ipsw
+          7z e -y /tmp/ipsw.zip -o/tmp/ipsw 087-86698-044.dmg 087-86593-047.dmg 087-86715-047.dmg
+          ls -l /tmp/ipsw
+          df -h /
+      - name: build iOS root image
+        run: |
+          sudo bash tools/mkiosroot.sh /tmp/ipsw/087-86698-044.dmg /tmp/ipsw/087-86593-047.dmg /tmp/ipsw/087-86715-047.dmg /tmp/ios16-root.img 16G
+          sudo mkdir -p /mnt/iosroot
+          sudo mount -t hfsplus -o loop,force /tmp/ios16-root.img /mnt/iosroot
+          sudo python3 tools/sweet-root-tweaks.py /mnt/iosroot
+          sudo umount /mnt/iosroot
+          ls -l /tmp/ios16-root.img
+      - name: compress
+        run: |
+          zstd -10 -T0 --long=27 /tmp/ios16-root.img -o /tmp/ios16-root.img.zst
+          ls -l /tmp/ios16-root.img.zst
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios16-root-sagit
+          path: /tmp/ios16-root.img.zst
+          compression-level: 0
+          retention-days: 3
