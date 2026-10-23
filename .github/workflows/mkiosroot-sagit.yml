@@ -10,6 +10,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y p7zip-full hfsprogs rsync cmake g++ libfuse3-dev libicu-dev libssl-dev libbz2-dev zlib1g-dev libattr1-dev liblzma-dev zstd
+      - name: ensure hfsplus module
+        run: |
+          sudo modprobe hfsplus || true
+          if ! grep -q hfsplus /proc/filesystems; then
+            sudo apt-get install -y linux-modules-extra-$(uname -r) || true
+            sudo depmod -a || true
+            sudo modprobe hfsplus || true
+          fi
+          grep hfsplus /proc/filesystems || echo "HFS+ NOT AVAILABLE (will try anyway)"
+          uname -r
       - uses: actions/checkout@v4
         with:
           ref: sagit
