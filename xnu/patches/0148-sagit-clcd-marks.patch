@@ -1,0 +1,21 @@
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -265,12 +265,17 @@
+ 	printf("SAGIT-start: AppleCLCD::start\n");
+ 	PE_Video video;
+ 
++	printf("SAGIT: CLCD IOService::start begin (sagit)\n");
+ 	if (!IOService::start(provider)) {
+ 		return false;
+ 	}
+-	topaz_modem_init();
++	printf("SAGIT: CLCD IOService::start returned (sagit)\n");
++	/* SAGIT: topaz_modem_init() is SM6225-specific (GLINK/QRTR/SMEM) and hangs on msm8998 */
++	printf("SAGIT: CLCD modem init skipped (sagit)\n");
+ 	sweet_busy_init();
++	printf("SAGIT: CLCD busy init done (sagit)\n");
+ 	PE_current_console(&video);
++	printf("SAGIT: CLCD console acquired (sagit)\n");
+ 	fPhys = video.v_baseAddr;
+ 	fWidth = (uint32_t)video.v_width;
+ 	fHeight = (uint32_t)video.v_height;

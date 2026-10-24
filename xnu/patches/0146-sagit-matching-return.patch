@@ -1,0 +1,12 @@
+--- a/iokit/Kernel/IOStartIOKit.cpp
++++ b/iokit/Kernel/IOStartIOKit.cpp
+@@ -187,7 +187,9 @@
+ 	printf("SAGIT: StartIOKitMatching enter\n");
+ 	SOCD_TRACE_XNU(START_IOKIT);
+ 	assert(gRootNub != NULL);
++	printf("SAGIT: startIOServiceMatching call\n");
+ 	bool ok = gRootNub->startIOServiceMatching();
++	printf("SAGIT: startIOServiceMatching returned %d\n", (int)ok);
+ 	if (__improbable(!ok)) {
+ 		panic("Failed to start IOService matching");
+ 	}

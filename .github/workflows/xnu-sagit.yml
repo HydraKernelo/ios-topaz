@@ -105,6 +105,25 @@ jobs:
           bash build.sh
           ccache -s
 
+      - name: Sagit patch diagnostics
+        if: always()
+        run: |
+          set -x
+          find dxb -name SweetFramebuffer.cpp -print
+          f=$(find dxb -name SweetFramebuffer.cpp | head -1)
+          if [ -n "$f" ]; then
+            echo "=== DIAG CLCD greps ==="
+            grep -n "CLCD" "$f" | head -30 || true
+            echo "=== DIAG region 250-330 ==="
+            sed -n '250,330p' "$f"
+            grep -q "CLCD early return" "$f" || { echo "0152 NOT APPLIED"; exit 1; }
+          c=dxb/xnu/iokit/Kernel/arm/SweetCPU.cpp
+          grep -q "SGI1 not enabled" "$c" || { echo "0153 NOT APPLIED"; exit 1; }
+          grep -q "SGI1 not enabled" "$c" || { echo "0153 NOT APPLIED"; exit 1; }
+          grep -q "stepC mcache" dxb/xnu/bsd/kern/bsd_init.c || { echo "0157 NOT APPLIED"; exit 1; }
+          echo "=== DIAG end ==="
+          fi
+
       - name: Package build tree for local compiles
         if: always()
         run: |
