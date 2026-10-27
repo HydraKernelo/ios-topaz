@@ -1,0 +1,69 @@
+name: build-ios-sagit
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: "doctor | full"
+        required: false
+        default: "doctor"
+  push:
+    paths:
+      - '.github/workflows/build-ios-sagit.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    steps:
+      - name: Checkout external project
+        run: |
+          git clone --depth 1 https://github.com/MC-XiaoXiao/ios_sagit.git work
+          cd work && git log -1 --oneline
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            python3 python3-pip python3-venv \
+            build-essential cmake ninja-build pkg-config git curl wget \
+            clang lld llvm libclang-dev \
+            libcapstone-dev libfuse3-dev fuse3 libssl-dev uuid-dev \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            zstd p7zip-full bsdextrautils \
+            autoconf automake libtool bison flex texinfo gperf patch file
+          python3 -m pip install --upgrade pip
+      - name: Doctor (env report)
+        working-directory: work
+        run: |
+          set -x
+          make doctor 2>&1 | tail -200 || true
+          python3 --version
+          clang --version | head -3 || true
+          llvm-config --version || true
+          nproc; free -h; df -h / | tail -1
+      - name: Bootstrap
+        if: ${{ inputs.stage == 'full' }}
+        working-directory: work
+        run: make bootstrap 2>&1 | tail -300
+      - name: Build
+        if: ${{ inputs.stage == 'full' }}
+        working-directory: work
+        run: make build 2>&1 | tail -300
+      - name: EDK2 + boot image
+        if: ${{ inputs.stage == 'full' }}
+        working-directory: work
+        run: |
+          make edk2-sagit 2>&1 | tail -150 || true
+          make boot-image 2>&1 | tail -150 || true
+          ls -la build/boot 2>/dev/null || true
+          ls -la build/bridge 2>/dev/null || true
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-sagit-build
+          path: |
+            work/build/boot
+            work/build/bridge
+            work/build/output
+          if-no-files-found: warn
+          retention-days: 5
