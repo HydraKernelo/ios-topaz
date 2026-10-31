@@ -1,0 +1,39 @@
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -685,6 +685,7 @@
+ 	assert(matching);
+ 	matching->setObject(gIOResourceMatchedKey, gIOBSDKey);
+ 
++	printf("SAGIT: IOFindBSDRoot wait begin (sagit)\n");
+ 	if ((service = IOService::waitForMatchingService(matching, 30ULL * kSecondScale))) {
+ 		OSSafeReleaseNULL(service);
+ 	} else {
+@@ -692,6 +693,7 @@
+ 	}
+ 	matching->release();
+ 	matching = NULL;
++	printf("SAGIT: IOFindBSDRoot wait done (sagit)\n");
+ 
+ 	if (mountAttempts++) {
+ 		IOLog("mount(%d) failed\n", mountAttempts);
+@@ -772,13 +774,18 @@
+ //
+ //	SWEET: root on a GPT partition of the internal UFS (bsd/dev/sweet_ufs.c)
+ //
++	printf("SAGIT: IOFindBSDRoot rd=%s (sagit)\n", rdBootVar);
+ 	if (strcmp(rdBootVar, "ufsroot0") == 0) {
+ 		extern int sweet_ufs_rootdev(dev_t *dev);
+ 		OSSafeReleaseNULL(matching);
++		printf("SAGIT: SWEET UFS rootdev begin (sagit)\n");
+ 		int ufs_error = sweet_ufs_rootdev(root);
++		printf("SAGIT: SWEET UFS rootdev err=%d (sagit)\n", ufs_error);
+ 		if (ufs_error) {
+-			panic("IOFindBSDRoot: SWEET UFS root %s unavailable: %d", rdBootVar, ufs_error);
+-		}
++			printf("SAGIT: SWEET UFS root unavailable err=%d, parking (sagit)\n", ufs_error);
++			for (;;) { IOSleep(1000); }
++		}
++		printf("SAGIT: SWEET UFS root found major=%d minor=%d (sagit)\n", major(*root), minor(*root));
+ 		strlcpy(rootName, rdBootVar, rootNameSize);
+ 		IOLog("BSD root: %s, major %d, minor %d\n", rootName, major(*root), minor(*root));
+ 		*oflags = 0;

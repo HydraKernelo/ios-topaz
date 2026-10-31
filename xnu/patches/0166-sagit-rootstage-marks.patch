@@ -1,0 +1,45 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -889,6 +889,7 @@
+ 		bsd_init_kprintf("vfs_mountroot\n");
+ 			printf("SAGIT: vfs_mountroot\n");
+ 		if (0 == (err = vfs_mountroot())) {
++			printf("SAGIT: vfs_mountroot returned 0 (sagit)\n");
+ 			break;
+ 		}
+ 		rootdevice[0] = '\0';
+@@ -906,6 +907,8 @@
+ 		}
+ #endif
+ 		printf("cannot mount root, errno = %d\n", err);
++		printf("SAGIT: mount failed err=%d, parking (sagit)\n", err);
++		for (;;) { IOSleep(1000); }
+ 	}
+ 
+ 	IOSecureBSDRoot(rootdevice);
+@@ -916,7 +919,8 @@
+ 	bsd_init_kprintf("calling VFS_ROOT\n");
+ 	/* Get the vnode for '/'.  Set fdp->fd_fd.fd_cdir to reference it. */
+ 	if (VFS_ROOT(mountlist.tqh_first, &init_rootvnode, vfs_context_kernel())) {
+-		panic("bsd_init: cannot find root vnode: %s", PE_boot_args());
++		printf("SAGIT: VFS_ROOT failed, parking (sagit)\n");
++		for (;;) { IOSleep(1000); }
+ 	}
+ 	(void)vnode_ref(init_rootvnode);
+ 	(void)vnode_put(init_rootvnode);
+@@ -1055,6 +1059,7 @@
+ 
+ 	bsd_init_kprintf("calling bsd_utaskbootstrap\n");
+ 	bsd_utaskbootstrap();
++	printf("SAGIT: bsd_utaskbootstrap done (sagit)\n");
+ 
+ 	pal_kernel_announce();
+ 
+@@ -1109,6 +1114,7 @@
+ 
+ 	bsd_init_kprintf("bsd_do_post - done");
+ 
++	printf("SAGIT: calling load_init_program (sagit)\n");
+ 	load_init_program(p);
+ 	lock_trace = 1;
+ }

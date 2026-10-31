@@ -1,0 +1,30 @@
+--- a/iokit/Kernel/arm/SweetBattery.cpp
++++ b/iokit/Kernel/arm/SweetBattery.cpp
+@@ -324,26 +324,7 @@
+ 	if (!IOPMPowerSource::start(provider)) {
+ 		return false;
+ 	}
+-	(void)sweet_cpufreq_max();
+-	int real = 1;   /* topaz: real gauge by default; sweetbattery=0 for the static fallback */
+-	(void)PE_parse_boot_argn("sweetbattery", &real, sizeof(real));
+-	fReal = real == 1 && sweet_i2c1_init() == 0;
+-	/* Publish a complete source BEFORE registerService wakes powerd. */
+-	poll();
+-	if (fReal) {
+-		fLoop = IOWorkLoop::workLoop();
+-		fTimer = IOTimerEventSource::timerEventSource(this, &SweetBattery::timerFired);
+-		if (fLoop && fTimer && fLoop->addEventSource(fTimer) == kIOReturnSuccess) {
+-			fTimerAdded = true;
+-			fRunning = true;
+-			fTimer->setTimeoutMS(10000);
+-		} else {
+-			fReal = false;
+-			poll();
+-			IOLog("SWEET BATTERY: timer unavailable; static fallback\n");
+-		}
+-	}
+-	registerService();
++	printf("SAGIT: SweetBattery skipped (sagit)\n");
+ 	return true;
+ }
+ 

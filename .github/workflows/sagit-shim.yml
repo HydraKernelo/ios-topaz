@@ -1,0 +1,60 @@
+name: sagit-shim
+
+# Cross-builds the bare-metal shim with the Xiaomi Mi 6 (MSM8998) constants.
+# Needs no phone and no kernel: the output is shim/out/Image, the raw code that
+# build.sh normally wraps in a boot image v4 with a payload appended.
+on:
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "SAGIT_DEBUG breadcrumbs (1=on, 0=clean console)"
+        default: "0"
+  push:
+    branches: [sagit]
+
+jobs:
+  shim:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Build shim (sagit)
+        env:
+          SAGIT_DEBUG: ${{ inputs.debug == '1' && '1' || '' }}
+        run: |
+          cd shim
+          PLATFORM=sagit bash ./build.sh
+      - name: Collect outputs
+        run: |
+          mkdir -p /tmp/art
+          cp shim/out/Image /tmp/art/Image 2>/dev/null || true
+          cp shim/out/shim.elf /tmp/art/shim.elf 2>/dev/null || true
+          ls -l shim/out || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sagit-shim
+          path: /tmp/art/
+          if-no-files-found: warn
+
+  a540-regs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Compile A540 skeleton for arm64 (freestanding, no libc)
+        run: |
+          aarch64-linux-gnu-gcc -std=c11 -Wall -Wextra -Werror -ffreestanding -nostdlib \
+            -I platforms/sagit/gpu -c platforms/sagit/gpu/a540_gpu.c -o /tmp/a540_gpu_arm64.o
+      - name: Build and run A540 host test
+        run: |
+          gcc -std=c11 -Wall -Wextra -Werror -g -DA540_HOST_TEST=1 -fsanitize=address,undefined \
+            -I platforms/sagit/gpu \
+            platforms/sagit/gpu/a540_gpu.c platforms/sagit/gpu/test_a540_gpu.c \
+            -o /tmp/a540-gpu-test
+          /tmp/a540-gpu-test

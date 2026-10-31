@@ -1,0 +1,33 @@
+name: sagit-debug
+
+# Debug build: shim with SAGIT_DEBUG framebuffer breadcrumbs (coloured bars at
+# y=1600+idx*12). Used to triage where the sagit shim stops on real hardware.
+on:
+  workflow_dispatch:
+
+jobs:
+  shim-debug:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross
+      - name: Build debug shim (sagit)
+        env:
+          SAGIT_DEBUG: "1"
+        run: |
+          cd shim
+          PLATFORM=sagit bash ./build.sh
+      - name: Collect outputs
+        run: |
+          mkdir -p /tmp/art
+          cp shim/out/Image /tmp/art/Image 2>/dev/null || true
+          cp shim/out/shim.elf /tmp/art/shim.elf 2>/dev/null || true
+          ls -l shim/out || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sagit-shim-debug
+          path: /tmp/art/
+          if-no-files-found: warn

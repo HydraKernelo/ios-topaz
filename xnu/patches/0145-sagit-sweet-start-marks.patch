@@ -1,0 +1,104 @@
+--- a/iokit/Kernel/arm/SweetBattery.cpp
++++ b/iokit/Kernel/arm/SweetBattery.cpp
+@@ -320,6 +320,7 @@
+ bool
+ SweetBattery::start(IOService *provider)
+ {
++	printf("SAGIT-start: SweetBattery::start\n");
+ 	if (!IOPMPowerSource::start(provider)) {
+ 		return false;
+ 	}
+--- a/iokit/Kernel/arm/SweetCPU.cpp
++++ b/iokit/Kernel/arm/SweetCPU.cpp
+@@ -61,6 +61,7 @@
+ bool
+ SweetCPU::start(IOService *provider)
+ {
++	printf("SAGIT-start: SweetCPU::start\n");
+ 	const ml_topology_info_t *topology = ml_get_topology_info();
+ 	OSNumber *logical = OSDynamicCast(OSNumber, provider->getProperty("logical-cpu-id"));
+ 	OSData *reg = OSDynamicCast(OSData, provider->getProperty("reg"));
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -262,6 +262,7 @@
+ bool
+ AppleCLCD::start(IOService *provider)
+ {
++	printf("SAGIT-start: AppleCLCD::start\n");
+ 	PE_Video video;
+ 
+ 	if (!IOService::start(provider)) {
+@@ -1044,6 +1045,7 @@
+ bool
+ IOMobileFramebufferUserClient::start(IOService *provider)
+ {
++	printf("SAGIT-start: IOMobileFramebufferUserClient::start\n");
+ 	fFB = OSDynamicCast(AppleCLCD, provider);
+ 	if (fFB == NULL || !IOUserClient::start(provider)) {
+ 		return false;
+--- a/iokit/Kernel/arm/SweetKeyStore.cpp
++++ b/iokit/Kernel/arm/SweetKeyStore.cpp
+@@ -71,6 +71,7 @@
+ bool
+ AppleKeyStore::start(IOService *provider)
+ {
++	printf("SAGIT-start: AppleKeyStore::start\n");
+ 	if (!IOService::start(provider)) {
+ 		return false;
+ 	}
+--- a/iokit/Kernel/arm/SweetPlatformExpert.cpp
++++ b/iokit/Kernel/arm/SweetPlatformExpert.cpp
+@@ -25,6 +25,7 @@
+ bool
+ SweetPlatformExpert::start(IOService *provider)
+ {
++	printf("SAGIT-start: SweetPlatformExpert::start\n");
+ 	IOLog("SWEET: starting device-tree platform expert\n");
+ 	if (!IODTPlatformExpert::start(provider)) {
+ 		return false;
+--- a/iokit/Kernel/arm/SweetSurface.cpp
++++ b/iokit/Kernel/arm/SweetSurface.cpp
+@@ -485,6 +485,7 @@
+ bool
+ IOCoreSurfaceRoot::start(IOService *provider)
+ {
++	printf("SAGIT-start: IOCoreSurfaceRoot::start\n");
+ 	if (!IOService::start(provider)) {
+ 		return false;
+ 	}
+--- a/iokit/Kernel/arm/SweetWatchdog.cpp
++++ b/iokit/Kernel/arm/SweetWatchdog.cpp
+@@ -43,6 +43,7 @@
+ bool
+ IOWatchdog::start(IOService *provider)
+ {
++	printf("SAGIT-start: IOWatchdog::start\n");
+ 	if (!IOService::start(provider)) {
+ 		return false;
+ 	}
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -48,6 +48,7 @@
+ bool
+ IOHIDEventService::start(IOService *provider)
+ {
++	printf("SAGIT-start: IOHIDEventService::start\n");
+ 	if (!super::start(provider)) {
+ 		return false;
+ 	}
+@@ -381,6 +382,7 @@
+ bool
+ SweetHIDButtons::start(IOService *provider)
+ {
++	printf("SAGIT-start: SweetHIDButtons::start\n");
+ 	if (!IOHIDEventService::start(provider)) {
+ 		return false;
+ 	}
+@@ -429,6 +431,7 @@
+ bool
+ SweetHIDTouch::start(IOService *provider)
+ {
++	printf("SAGIT-start: SweetHIDTouch::start\n");
+ 	fLock = IOLockAlloc();
+ 	if (!fLock || !IOHIDEventService::start(provider)) {
+ 		return false;

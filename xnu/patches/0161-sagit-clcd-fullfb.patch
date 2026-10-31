@@ -1,0 +1,53 @@
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -276,9 +276,15 @@
+ 	printf("SAGIT: CLCD busy init done (sagit)\n");
+ 	PE_current_console(&video);
+ 	printf("SAGIT: CLCD console acquired (sagit)\n");
+-	/* SAGIT: topaz MDP/DSI setup at 0x05e0xxxx does not exist on msm8998 */
+-	printf("SAGIT: CLCD early return (sagit)\n");
+-	return true;
++	/* SAGIT: boot framebuffer display path; 0 keeps console-only early return */
++	int sagit_fullfb = 0;
++	(void)PE_parse_boot_argn("sagitclcdfull", &sagit_fullfb, sizeof(sagit_fullfb));
++	printf("SAGIT: CLCD full-fb flag=%d (sagit)\n", sagit_fullfb);
++	if (!sagit_fullfb) {
++		printf("SAGIT: CLCD early return (sagit)\n");
++		return true;
++	}
++	printf("SAGIT: CLCD full path continues (sagit)\n");
+ 	fPhys = video.v_baseAddr;
+ 	fWidth = (uint32_t)video.v_width;
+ 	fHeight = (uint32_t)video.v_height;
+@@ -314,9 +320,11 @@
+ 		IOLog("SWEET FB: no vsync timer\n");
+ 		return false;
+ 	}
+-	fVig0 = (volatile uint32_t *)ml_io_map(0x05e05000, 0x1000);
+-	fCtl0 = (volatile uint32_t *)ml_io_map(0x05e02000, 0x1000);
+-	fDsi = (volatile uint8_t *)ml_io_map(0x05e94000, 0x1000);
++	/* SAGIT: SM6225 MDP/DSI registers at 0x05e0xxxx do not exist on msm8998 */
++	fVig0 = NULL;
++	fCtl0 = NULL;
++	fDsi = NULL;
++	printf("SAGIT: CLCD topaz MDP/DSI maps skipped (sagit)\n");
+ 	fDsiBuf = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+ 	    kIODirectionInOut | kIOMemoryPhysicallyContiguous, page_size, 0x00000000fffff000ull);
+ 	fDsiBufPhys = fDsiBuf ? fDsiBuf->getPhysicalSegment(0, NULL, kIOMemoryMapperNone) : 0;
+@@ -359,7 +367,7 @@
+ 	}
+ 	OSSafeReleaseNULL(accel);
+ 	/* dpu sm6115 catalog: intf_1 at mdp+0x6a800, mdp at 0x5e01000 */
+-	fIntf1 = (volatile uint32_t *)ml_io_map(0x05e6b000, 0x1000);
++	fIntf1 = NULL;
+ 	if (fIntf1 != NULL) {
+ 		volatile uint32_t *r = fIntf1 + 0x800 / 4;
+ 		r[0x0a8 / 4] = 0x3;     /* FRAME_LINE_COUNT_EN */
+@@ -410,6 +418,7 @@
+ 	fFlushTicks = (hz == 0 || hz >= 60) ? 1 : 60 / hz;
+ 	fVsync->setTimeoutUS(SWEET_FB_VSYNC_US);
+ 
++	printf("SAGIT: CLCD publishing IOFB over boot framebuffer (sagit)\n");
+ 	setProperty(kIOUserClientClassKey, "IOMobileFramebufferUserClient");
+ 	setProperty("external", false);
+ 	setProperty("DisplayPipePlaneBaseAlignment", 64ULL, 32);

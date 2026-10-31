@@ -1,0 +1,89 @@
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -249,6 +249,7 @@
+ 	PE_init_printf(TRUE);
+ 
+ 	printf("iBoot version: %s\n", iBoot_version);
++	printf("SAGIT: PE_init_iokit begin\n");
+ #if defined(TARGET_OS_OSX) && defined(__arm64__)
+ 	printf("iBoot Stage 2 version: %s\n", iBoot_Stage_2_version);
+ #endif /* defined(TARGET_OS_OSX) && defined(__arm64__) */
+@@ -359,8 +360,10 @@
+ 		KDBG_RELEASE(IOKDBG_CODE(DBG_BOOTER, 0), start_time_value, debug_wait_start_value, load_kernel_start_value, populate_registry_time_value);
+ 	}
+ 
++	printf("SAGIT: calling InitIOKit\n");
+ 	InitIOKit(PE_state.deviceTreeHead);
+ 	ConfigureIOKit();
++	printf("SAGIT: PE_init_iokit done\n");
+ }
+ 
+ void
+--- a/iokit/Kernel/IOStartIOKit.cpp
++++ b/iokit/Kernel/IOStartIOKit.cpp
+@@ -133,6 +133,7 @@
+ void
+ InitIOKit(void *dtTop)
+ {
++	printf("SAGIT: InitIOKit enter\n");
+ 	// Compat for boot-args
+ 	gIOKitTrace |= (gIOKitDebug & kIOTraceCompatBootArgs);
+ 
+@@ -168,18 +169,22 @@
+ 	if (record_startup_extensions_function) {
+ 		record_startup_extensions_function();
+ 	}
++	printf("SAGIT: InitIOKit done\n");
+ }
+ 
+ void
+ ConfigureIOKit(void)
+ {
++	printf("SAGIT: ConfigureIOKit enter\n");
+ 	assert(gRootNub != NULL);
+ 	gRootNub->configureDefaults();
++	printf("SAGIT: ConfigureIOKit done\n");
+ }
+ 
+ void
+ StartIOKitMatching(void)
+ {
++	printf("SAGIT: StartIOKitMatching enter\n");
+ 	SOCD_TRACE_XNU(START_IOKIT);
+ 	assert(gRootNub != NULL);
+ 	bool ok = gRootNub->startIOServiceMatching();
+--- a/libkern/c++/OSKext.cpp
++++ b/libkern/c++/OSKext.cpp
+@@ -1050,6 +1050,7 @@
+ OSReturn
+ OSKext::removeKextBootstrap(void)
+ {
++	printf("SAGIT: removeKextBootstrap enter\n");
+ 	OSReturn                   result                = kOSReturnError;
+ 
+ 	const char               * dt_kernel_header_name = "Kernel-__HEADER";
+@@ -1072,6 +1073,7 @@
+ 	    kOSKextLogProgressLevel |
+ 	    kOSKextLogGeneralFlag,
+ 	    "Jettisoning kext bootstrap segments.");
++	printf("SAGIT: jettison logged\n");
+ 
+ 	/*
+ 	 * keep the linkedit segment around when booted from a new MH_FILESET
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -109,12 +109,14 @@
+ kern_return_t
+ IOKitBSDInit( void )
+ {
++	printf("SAGIT: IOKitBSDInit enter\n");
+ 	IOService::publishResource("IOBSD");
+ 
+ #if IOPOLLED_COREFILE
+ 	corefile_open_call = thread_call_allocate_with_options(IOOpenPolledCoreFile, NULL, THREAD_CALL_PRIORITY_KERNEL, THREAD_CALL_OPTIONS_ONCE);
+ #endif
+ 
++	printf("SAGIT: IOKitBSDInit done\n");
+ 	return kIOReturnSuccess;
+ }
+ 

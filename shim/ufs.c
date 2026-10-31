@@ -13,7 +13,12 @@
 #include "console.h"
 #include "ufs.h"
 
+#if defined(PLATFORM_SAGIT)
+#include "platform_sagit.h"
+#define UFS_BASE	SAGIT_UFS_BASE	/* ufshc@1da0000 (edk2 "UFS UFS REGS") */
+#else
 #define UFS_BASE	0x04804000UL	/* ufshc@4804000, topaz live FDT */
+#endif
 
 #define REG_CAP		0x00
 #define REG_VER		0x08

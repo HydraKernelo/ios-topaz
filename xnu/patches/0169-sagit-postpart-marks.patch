@@ -1,0 +1,27 @@
+--- a/bsd/dev/sweet_ufs.c
++++ b/bsd/dev/sweet_ufs.c
+@@ -263,6 +263,10 @@
+ 	if (lba > UINT32_MAX || count > BOUNCE_SIZE / UFS_BLOCK) {
+ 		return EINVAL;
+ 	}
++	static int sagit_reads;
++	if (sagit_reads < 12) {
++		printf("SAGIT: read #%d lba=0x%llx n=%u (sagit)\n", ++sagit_reads, lba, count);
++	}
+ 	uint8_t cdb[10] = {
+ 		0x28, 0,
+ 		(uint8_t)(lba >> 24), (uint8_t)(lba >> 16), (uint8_t)(lba >> 8), (uint8_t)lba,
+@@ -807,9 +811,13 @@
+ 	printf("SWEET UFS: \"%s\" on LUN %u: first block 0x%llx, %llu MiB, %s, DMA at 0x%llx\n",
+ 	    want, su.lun, su.first_block, su.nblocks * UFS_BLOCK >> 20,
+ 	    su.writable ? "read-write" : "read-only", su.dma_pa);
++	printf("SAGIT: log start begin (sagit)\n");
+ 	sweet_log_start();
++	printf("SAGIT: log start done, sample begin (sagit)\n");
+ 	sweet_sample_start();
++	printf("SAGIT: sample start done (sagit)\n");
+ 	thread_t gpt_thread;
++	printf("SAGIT: gpt watch start (sagit)\n");
+ 	if (kernel_thread_start(sweet_gpt_watch, NULL, &gpt_thread) == KERN_SUCCESS) {
+ 		thread_deallocate(gpt_thread);
+ 	}

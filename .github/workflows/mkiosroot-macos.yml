@@ -1,0 +1,91 @@
+name: mkiosroot-macos
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [sagit]
+    paths:
+      - ".github/workflows/mkiosroot-macos.yml"
+
+env:
+  IPSW_URL: https://updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw
+
+concurrency:
+  group: mkiosroot-macos
+  cancel-in-progress: true
+
+jobs:
+  root:
+    runs-on: macos-14
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download IPSW
+        run: curl -L --retry 3 --retry-delay 5 -o ipsw.zip "$IPSW_URL" && ls -lh ipsw.zip
+
+      - name: Extract DMGs
+        run: |
+          set -euo pipefail
+          mkdir -p ipsw
+          unzip -o ipsw.zip -d ipsw > /dev/null
+          ls -la ipsw | head -30
+
+      - name: Mount IPSW DMGs (APFS native, LZBITMAP handled by macOS)
+        run: |
+          set -euo pipefail
+          mkdir -p mnt/os mnt/sysos mnt/appos
+          hdiutil attach -nobrowse -readonly -mountpoint mnt/os ipsw/087-86698-044.dmg
+          hdiutil attach -nobrowse -readonly -mountpoint mnt/sysos ipsw/087-86593-047.dmg
+          hdiutil attach -nobrowse -readonly -mountpoint mnt/appos ipsw/087-86715-047.dmg
+          df -h mnt/os mnt/sysos mnt/appos
+
+      - name: Build HFS+ root image
+        run: |
+          set -euo pipefail
+          mkfile 16g root.img
+          DEV=$(hdiutil attach -nomount root.img | awk 'NR==1{print $1}')
+          echo "raw device: $DEV"
+          newfs_hfs -s -J -v iOSRoot "$DEV"
+          hdiutil detach "$DEV"
+          mkdir -p mnt/root
+          hdiutil attach -nobrowse -mountpoint mnt/root root.img
+          RS="rsync -aH --numeric-ids"
+          sudo $RS mnt/os/ mnt/root/
+          sudo mkdir -p mnt/root/private/preboot/Cryptexes/OS mnt/root/private/preboot/Cryptexes/App
+          sudo $RS mnt/sysos/ mnt/root/private/preboot/Cryptexes/OS/
+          sudo $RS mnt/appos/ mnt/root/private/preboot/Cryptexes/App/
+          dsc=private/preboot/Cryptexes/OS/System/Library/Caches/com.apple.dyld
+          sudo mkdir -p mnt/root/System/Library/Caches/com.apple.dyld
+          for f in mnt/root/$dsc/*; do
+            t="mnt/root/System/Library/Caches/com.apple.dyld/${f##*/}"
+            sudo rm -f "$t"
+            sudo ln "$f" "$t"
+          done
+          echo "=== verify cache is not empty ==="
+          test -s "mnt/root/System/Library/Caches/com.apple.dyld/dyld_shared_cache_arm64"
+          sudo du -sh "mnt/root/System/Library/Caches/com.apple.dyld"
+          echo "=== dyld cache in cryptex ==="
+          sudo ls -la mnt/root/$dsc/ || true
+          echo "=== dyld cache at System/Library/Caches ==="
+          sudo ls -la mnt/root/System/Library/Caches/com.apple.dyld/ || true
+          echo "=== root key paths ==="
+          sudo ls -la mnt/root/sbin/launchd mnt/root/usr/lib/dyld mnt/root/System/Library/CoreServices/SpringBoard.app/SpringBoard || true
+          df -h mnt/root
+          sudo umount mnt/root
+          ls -lh root.img
+
+      - name: Compress (zstd)
+        run: |
+          set -euo pipefail
+          brew install zstd
+          zstd -10 --long=27 -T0 -f root.img -o ios16-root-macos.img.zst
+          ls -lh ios16-root-macos.img.zst
+
+      - name: Upload root image
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios16-root-macos
+          path: ios16-root-macos.img.zst
+          compression-level: 0
+          retention-days: 3

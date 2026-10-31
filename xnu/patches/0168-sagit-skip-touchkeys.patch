@@ -1,0 +1,21 @@
+--- a/bsd/dev/sweet_ufs.c
++++ b/bsd/dev/sweet_ufs.c
+@@ -821,8 +821,16 @@
+ 	 */
+ 	int hw = 0;
+ 	(void)PE_parse_boot_argn("sweethw", &hw, sizeof(hw));
+-	sweet_touch_init();
+-	sweet_keys_init();
++	/* SAGIT: sweet_touch_init() drives the topaz FT5452 on QUP0 SE2 and
++	 * sweet_keys_init() talks to the PM6125 over SPMI; neither exists on
++	 * msm8998, so only run them when explicitly asked. */
++	if (hw == 1) {
++		printf("SAGIT: touch/keys init requested (sagit)\n");
++		sweet_touch_init();
++		sweet_keys_init();
++	} else {
++		printf("SAGIT: touch/keys skipped on msm8998 (sagit)\n");
++	}
+ 	if (hw == 1) {
+ 		sweet_usb_probe();
+ 	} else {

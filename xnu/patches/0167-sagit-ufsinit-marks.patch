@@ -1,0 +1,17 @@
+--- a/bsd/dev/sweet_ufs.c
++++ b/bsd/dev/sweet_ufs.c
+@@ -745,12 +745,14 @@
+ 	char want[64] = "userdata";
+ 	int error;
+ 
++	printf("SAGIT: UFS init enter (sagit)\n");
+ 	if (SecureDTLookupEntry(NULL, "/sweet-ufs", &node) != kSuccess ||
+ 	    SecureDTGetProperty(node, "reg", (void const **)&reg, &size) != kSuccess ||
+ 	    size < 2 * sizeof(uintptr_t)) {
+ 		printf("SWEET UFS: no /sweet-ufs node in the device tree\n");
+ 		return ENXIO;
+ 	}
++	printf("SAGIT: UFS init node ok reg=0x%lx size=0x%x (sagit)\n", (unsigned long)reg[0], size);
+ 	PE_parse_boot_argn("ufsroot", want, sizeof(want));
+ 	uint32_t rw = 0;
+ 	PE_parse_boot_argn("ufsrw", &rw, sizeof(rw));
