@@ -1,71 +1,91 @@
 name: build-ios-sagit
+
 on:
   workflow_dispatch:
-    inputs:
-      stage:
-        description: "doctor | full"
-        required: false
-        default: "doctor"
-  push:
-    paths:
-      - '.github/workflows/build-ios-sagit.yml'
 
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     steps:
-      - name: Checkout external project
+      - name: Free disk space
         run: |
-          git clone --depth 1 https://github.com/MC-XiaoXiao/ios_sagit.git work
-          cd work && git log -1 --oneline
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost || true
+          df -h /
+
       - name: Install host dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            python3 python3-pip python3-venv \
-            build-essential cmake ninja-build pkg-config git curl wget \
-            clang lld llvm libclang-dev \
-            libcapstone-dev libfuse3-dev fuse3 libssl-dev uuid-dev \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            zstd p7zip-full bsdextrautils \
-            autoconf automake libtool bison flex texinfo gperf patch file
-          python3 -m pip install --upgrade pip
-          curl -LsSf https://astral.sh/uv/install.sh | sh
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential cmake ninja-build git curl wget unzip zip \
+            flex bison m4 autoconf automake libtool patch perl python3 python3-pip python3-venv pkg-config \
+            device-tree-compiler libfuse3-dev zlib1g-dev libfdt-dev libssl-dev libxml2-dev liblzma-dev libbz2-dev \
+            libtinyxml2-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu iasl nasm mtools dosfstools gdisk \
+            clang lld llvm llvm-dev libc++-dev libc++abi-dev uuid-dev
+          sudo apt-get install -y -qq libcapstone-dev || echo "no capstone dev pkg"
+          python3 -m pip install --user --break-system-packages capstone keystone-engine || true
+          sudo ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-none-linux-gnu-gcc || true
+          curl -LsSf https://astral.sh/uv/install.sh | sh || true
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      - name: Doctor (env report)
+          clang --version | head -2
+          aarch64-linux-gnu-gcc --version | head -1
+
+      - name: Clone ios_sagit
+        run: |
+          git clone --depth 1 https://github.com/MC-XiaoXiao/ios_sagit.git work
+          cd work
+          git log --oneline -3
+          ls
+
+      - name: Doctor
+        working-directory: work
+        run: make doctor 2>&1 | tee ../doctor.log
+
+      - name: Bootstrap (downloads SDK/tools)
+        working-directory: work
+        timeout-minutes: 200
+        continue-on-error: true
+        run: |
+          make bootstrap JOBS=2 2>&1 | tee ../bootstrap.log
+          echo "=== bootstrap finished ==="
+
+      - name: Inspect bootstrap results
+        if: always()
         working-directory: work
         run: |
-          set -x
-          make doctor 2>&1 | tail -200 || true
-          python3 --version
-          clang --version | head -3 || true
-          llvm-config --version || true
-          nproc; free -h; df -h / | tail -1
-      - name: Bootstrap
-        if: ${{ inputs.stage == 'full' }}
+          ls -la build 2>/dev/null || true
+          ls -la build/sdk 2>/dev/null || true
+          for f in build/*.log; do echo "--- $f"; tail -40 "$f"; done 2>/dev/null || true
+
+      - name: Kernel + drivers + bridge
         working-directory: work
-        run: make bootstrap 2>&1 | tail -300
-      - name: Build
-        if: ${{ inputs.stage == 'full' }}
-        working-directory: work
-        run: make build 2>&1 | tail -300
-      - name: EDK2 + boot image
-        if: ${{ inputs.stage == 'full' }}
-        working-directory: work
+        timeout-minutes: 150
+        continue-on-error: true
         run: |
-          make edk2-sagit 2>&1 | tail -150 || true
-          make boot-image 2>&1 | tail -150 || true
-          ls -la build/boot 2>/dev/null || true
-          ls -la build/bridge 2>/dev/null || true
-      - name: Upload artifacts
+          make collect-sdm835 JOBS=2 || true
+          make build TARGET=SDM835 JOBS=2 || true
+          make drivers JOBS=2 || true
+          make bridge JOBS=2 || true
+          make edk2-sagit JOBS=2 || true
+          make boot-image JOBS=2 || true
+          find build -maxdepth 4 -type f -size +500k -printf '%s %p\n' 2>/dev/null | sort -n | tail -25
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-sagit-logs
+          path: |
+            doctor.log
+            bootstrap.log
+            work/build/*.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Upload build tree
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ios-sagit-build
-          path: |
-            work/build/boot
-            work/build/bridge
-            work/build/output
+          path: work/build
           if-no-files-found: warn
-          retention-days: 5
+          retention-days: 3
