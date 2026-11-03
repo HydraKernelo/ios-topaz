@@ -1,0 +1,15 @@
+--- a/iokit/Kernel/IOStartIOKit.cpp
++++ b/iokit/Kernel/IOStartIOKit.cpp
+@@ -176,7 +176,11 @@
+ ConfigureIOKit(void)
+ {
+ 	printf("SAGIT: ConfigureIOKit enter\n");
+-	assert(gRootNub != NULL);
++	printf("SAGIT: gRootNub=%p\n", (void *)gRootNub);
++	if (gRootNub == NULL) {
++		printf("SAGIT: no root nub, skipping matching\n");
++		return;
++	}
+ 	gRootNub->configureDefaults();
+ 	printf("SAGIT: ConfigureIOKit done\n");
+ }

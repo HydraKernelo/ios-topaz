@@ -1,0 +1,44 @@
+--- a/bsd/kern/kern_exec.c
++++ b/bsd/kern/kern_exec.c
+@@ -6763,6 +6763,8 @@
+ 	assert(scratch_addr);
+ 	assert(path);
+ 
++	printf("SAGIT: init exec begin %s (sagit)\n", path);
++
+ 	/*
+ 	 * Copy out program name.
+ 	 */
+@@ -6828,7 +6830,11 @@
+ 	 */
+ 	set_security_token(p);
+ 
+-	return execve(p, &init_exec_args, retval);
++	{
++		int sagit_err = execve(p, &init_exec_args, retval);
++		printf("SAGIT: init execve returned %d (sagit)\n", sagit_err);
++		return sagit_err;
++	}
+ }
+ 
+ static const char * init_programs[] = {
+@@ -6899,7 +6905,8 @@
+ 				return;
+ 			}
+ 
+-			panic("Process 1 exec of launchd.release failed, errno %d", error);
++			printf("SAGIT: launchd exec failed errno=%d, parking (sagit)\n", error);
++			for (;;) { __asm__ __volatile__ ("nop"); }
+ 		} else {
+ 			strlcpy(launchd_path, "/usr/appleinternal/sbin/launchd.", sizeof(launchd_path));
+ 			strlcat(launchd_path, launchd_suffix, sizeof(launchd_path));
+@@ -6926,7 +6933,8 @@
+ 		}
+ 	}
+ 
+-	panic("Process 1 exec of %s failed, errno %d", ((i == 0) ? "<null>" : init_programs[i - 1]), error);
++	printf("SAGIT: init exec all failed errno=%d, parking (sagit)\n", error);
++	for (;;) { __asm__ __volatile__ ("nop"); }
+ }
+ 
+ /*

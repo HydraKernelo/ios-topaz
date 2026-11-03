@@ -1,0 +1,22 @@
+--- a/osfmk/tests/kernel_tests.c
++++ b/osfmk/tests/kernel_tests.c
+@@ -247,6 +247,7 @@
+ 
+ 	if ((kernel_post_args & POSTARGS_RUN_TESTS) == 0) {
+ 		printf("No POST boot-arg set.\n");
++	printf("SAGIT: kernel tests past POST check (sagit)\n");
+ 		return retval;
+ 	}
+ 
+--- a/pexpert/arm/pe_init.c
++++ b/pexpert/arm/pe_init.c
+@@ -381,7 +381,9 @@
+ 	 * against a kernel which has not yet enabled the full set of available
+ 	 * hardware protections.
+ 	 */
++	printf("SAGIT: pe_init calling StartIOKitMatching (sagit)\n");
+ 	StartIOKitMatching();
++	printf("SAGIT: pe_init StartIOKitMatching returned (sagit)\n");
+ }
+ 
+ void

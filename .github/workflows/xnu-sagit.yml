@@ -16,15 +16,11 @@ on:
         description: make -k (collect all compile errors in one run)
         default: "true"
   push:
-    branches: [main]
+    branches: [main, sagit]
     paths:
       - "xnu/patches/**"
       - ".github/workflows/xnu.yml"
 
-
-concurrency:
-  group: xnu-${{ github.ref }}
-  cancel-in-progress: true
 
 env:
   DXB_REPO: https://github.com/blacktop/darwin-xnu-build
@@ -105,6 +101,37 @@ jobs:
           bash build.sh
           ccache -s
 
+      - name: Sagit patch diagnostics
+        if: always()
+        run: |
+          set -x
+          f=$(find dxb -name SweetFramebuffer.cpp | head -1)
+          echo "DIAG fb=$f"
+          if [ -n "$f" ]; then
+            grep -n "CLCD" "$f" | head -20 || true
+          fi
+          c=dxb/xnu/iokit/Kernel/arm/SweetCPU.cpp
+          grep -q "SGI1 not enabled" "$c" && echo "OK 0153" || echo "MISSING 0153"
+          grep -q "CLCD full path continues" "$f" && echo "OK 0161" || echo "MISSING 0161"
+          b=dxb/xnu/bsd/kern/bsd_init.c
+          grep -n "stepC mcache" "$b" && echo "OK 0158" || echo "MISSING 0158"
+          echo "=== DIAG end ==="
+      - name: Upload patched sources
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: src-snapshot
+          path: |
+            dxb/xnu/iokit/Kernel/arm/SweetFramebuffer.cpp
+            dxb/xnu/bsd/kern/bsd_init.c
+            dxb/xnu/bsd/dev/sweet_ufs.c
+            dxb/xnu/iokit/Kernel/arm/SweetCPU.cpp
+            dxb/xnu/iokit/Kernel/IOStartIOKit.cpp
+            dxb/xnu/iokit/bsddev/IOKitBSDInit.cpp
+            dxb/xnu/bsd/kern/kern_exec.c
+            dxb/xnu/bsd/kern/kern_fork.c
+            dxb/xnu/bsd/kern/kern_proc.c
+          if-no-files-found: warn
       - name: Package build tree for local compiles
         if: always()
         run: |

@@ -1,7 +1,12 @@
 #pragma once
 #include <stdint.h>
 
+#if defined(PLATFORM_SAGIT)
+#include "platform_sagit.h"
+#define FB_PHYS	SAGIT_FB_BASE
+#else
 #define FB_PHYS	0x5c000000UL
+#endif
 
 struct mmu_info {
 	uint64_t img_lo, img_hi, ttbr;

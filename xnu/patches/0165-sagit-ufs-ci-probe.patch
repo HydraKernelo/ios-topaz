@@ -1,0 +1,50 @@
+--- a/bsd/dev/sweet_ufs.c
++++ b/bsd/dev/sweet_ufs.c
+@@ -476,6 +476,7 @@
+ ufs_take_over_host(void)
+ {
+ 	uint32_t hce = ufs_rd(REG_HCE), hcs = ufs_rd(REG_HCS);
++	printf("SAGIT: UFS host hce=0x%x hcs=0x%x cap=0x%x (sagit)\n", hce, hcs, ufs_rd(REG_CAP));
+ 	if (!(hce & 1) || !(hcs & HCS_DP) || !(hcs & HCS_UTRLRDY)) {
+ 		printf("SWEET UFS: host not ready (hce 0x%x hcs 0x%x)\n", hce, hcs);
+ 		return ENXIO;
+@@ -761,6 +762,7 @@
+ 	su.wait = (wait == 1);
+ 
+ 	su.regs = ml_io_map(reg[0], reg[1]);
++	printf("SAGIT: UFS regs=%p reg0=0x%llx size=0x%x (sagit)\n", (void *)su.regs, (unsigned long long)reg[0], size);
+ 	if (kmem_alloc_contig(kernel_map, &su.dma, DMA_SIZE, PAGE_MASK, 0, 0,
+ 	    KMA_DATA | KMA_ZERO | KMA_PERMANENT, VM_KERN_MEMORY_IOKIT) != KERN_SUCCESS) {
+ 		printf("SWEET UFS: no contiguous DMA memory\n");
+@@ -776,6 +778,7 @@
+ 
+ 	lck_mtx_lock(&sweet_ufs_lock);
+ 	error = ufs_take_over_host();
++	printf("SAGIT: UFS take_over=%d (sagit)\n", error);
+ 	if (!error) {
+ 		static const uint8_t tur[6] = { 0x00 };
+ 		/* The first command after the bootloader may report a unit attention. */
+@@ -784,6 +787,7 @@
+ 	}
+ 	if (!error) {
+ 		error = ufs_find_partition(want);
++		printf("SAGIT: UFS find_partition(%s)=%d (sagit)\n", want, error);
+ 	}
+ 	lck_mtx_unlock(&sweet_ufs_lock);
+ 	if (error) {
+@@ -798,6 +802,7 @@
+ 	if (su.cmajor < 0) {
+ 		return ENXIO;
+ 	}
++	printf("SAGIT: UFS disks major=%d/%d first=0x%llx nblocks=0x%llx (sagit)\n", su.bmajor, su.cmajor, (unsigned long long)su.first_block, (unsigned long long)su.nblocks);
+ 	su.bdev = makedev(su.bmajor, 0);
+ 	devfs_make_node(su.bdev, DEVFS_BLOCK, UID_ROOT, GID_OPERATOR, 0640, "ufsroot0");
+ 	devfs_make_node(makedev(su.cmajor, 0), DEVFS_CHAR, UID_ROOT, GID_OPERATOR, 0640, "rufsroot0");
+@@ -979,6 +984,7 @@
+ int
+ sweet_ufs_rootdev(dev_t *dev)
+ {
++	printf("SAGIT: UFS rootdev ready=%d (sagit)\n", (int)su.ready);
+ 	if (!su.ready) {
+ 		int error = sweet_ufs_init();
+ 		if (error) {

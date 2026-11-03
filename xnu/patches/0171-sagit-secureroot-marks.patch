@@ -1,0 +1,20 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -911,7 +911,9 @@
+ 		for (;;) { IOSleep(1000); }
+ 	}
+ 
++	printf("SAGIT: secure bsd root begin (sagit)\n");
+ 	IOSecureBSDRoot(rootdevice);
++	printf("SAGIT: secure bsd root done (sagit)\n");
+ 
+ 	printf("SAGIT: root mounted\n");
+ 	mountlist.tqh_first->mnt_flag |= MNT_ROOTFS;
+@@ -927,6 +929,7 @@
+ 
+ 	lck_rw_lock_exclusive(&rootvnode_rw_lock);
+ 	set_rootvnode(init_rootvnode);
++	printf("SAGIT: rootvnode set (sagit)\n");
+ 	lck_rw_unlock_exclusive(&rootvnode_rw_lock);
+ 	init_rootvnode = NULLVP;  /* use rootvnode after this point */
+ 

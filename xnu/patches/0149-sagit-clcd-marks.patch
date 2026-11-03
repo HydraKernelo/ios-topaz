@@ -1,0 +1,9 @@
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -276,3 +276,6 @@
+ 	printf("SAGIT: CLCD busy init done (sagit)\n");
+ 	PE_current_console(&video);
+ 	printf("SAGIT: CLCD console acquired (sagit)\n");
++	/* SAGIT: skip topaz MDP/DSI setup (SM6225 0x05e0xxxx does not exist on msm8998) */
++	printf("SAGIT: CLCD early return (sagit)\n");
++	return true;

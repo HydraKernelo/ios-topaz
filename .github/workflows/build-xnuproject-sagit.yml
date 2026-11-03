@@ -1,0 +1,146 @@
+﻿name: build-xnuproject-sagit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [sagit]
+    paths:
+      - ".github/workflows/build-xnuproject-sagit.yml"
+      - "xnu/patches/xp-*"
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libbsd-dev libmd-dev
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            build-essential git curl unzip zip python3 python3-venv python3-pip \
+            cmake ninja-build flex bison m4 autoconf automake libtool patch perl \
+            pkg-config libbsd-dev libmd-dev xz-utils dtc device-tree-compiler iasl nasm libssl-dev zlib1g-dev libfdt-dev \
+            libcapstone-dev libtinyxml2-dev libfuse3-dev qemu-utils \
+            clang lld llvm llvm-dev gcc gcc-aarch64-linux-gnu g++-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            libzstd-dev libbz2-dev liblzma-dev liblzfse-dev || true
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq clang-18 llvm-18 llvm-18-dev lld-18 libclang-18-dev liblld-18-dev || true
+          sudo ln -sf /usr/bin/llvm-config-18 /usr/local/bin/llvm-config || true
+          sudo ln -sf /usr/bin/llvm-objcopy-18 /usr/local/bin/llvm-objcopy || true
+          sudo ln -sf /usr/bin/llvm-ar-18 /usr/local/bin/llvm-ar || true
+          sudo ln -sf /usr/bin/llvm-ranlib-18 /usr/local/bin/llvm-ranlib || true
+          sudo ln -sf /usr/bin/llvm-nm-18 /usr/local/bin/llvm-nm || true
+          sudo ln -sf /usr/bin/llvm-strip-18 /usr/local/bin/llvm-strip || true
+          sudo ln -sf /usr/bin/clang-18 /usr/local/bin/clang || true
+          sudo ln -sf /usr/bin/clang++-18 /usr/local/bin/clang++ || true
+          sudo ln -sf /usr/bin/ld.lld-18 /usr/local/bin/ld.lld || true
+          pip3 install --break-system-packages --quiet keystone-engine capstone || true
+          curl -LsSf https://astral.sh/uv/install.sh | sh || true
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          python3 --version; clang --version | head -2; llvm-config --version
+
+      - name: Extra host libs
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y uuid-dev libbsd-dev libmd-dev libbz2-dev gettext build-essential
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+          for t in gcc g++ cpp ar ranlib nm objcopy objdump strip ld as; do
+            sudo ln -sf "$(command -v aarch64-linux-gnu-$t || true)" /usr/bin/aarch64-none-linux-gnu-$t || true
+          done
+          aarch64-none-linux-gnu-gcc --version | head -1
+          ls /usr/include/bsd | head -3
+
+      - name: Clone upstream
+        run: |
+          git clone --depth 1 https://github.com/MC-XiaoXiao/ios_sagit.git work
+          cd work
+          git log --oneline -1
+
+      - name: Configure
+        working-directory: work
+        run: |
+          ./project.sh config --list || true
+          ./project.sh configure --board xiaomi/sagit --firmware ios/22H374-j171ap --profile desktop
+          ./project.sh config
+
+      - name: Bootstrap
+        working-directory: work
+        run: |
+          if ./project.sh bootstrap -j 3; then exit 0; fi
+          echo '=== first bootstrap pass failed, salvaging host archives ==='
+          find build \( -name 'libmacho.a' -o -name 'libstuff.a' \) -print | tee /tmp/arch.txt || true
+          mkdir -p tools/prefix/lib
+          while read -r f; do if [ -n "$f" ]; then cp -v "$f" tools/prefix/lib/ || true; fi; done < /tmp/arch.txt
+          echo '=== retry bootstrap ==='
+          ./project.sh bootstrap -j 3
+
+      - name: Doctor
+        working-directory: work
+        run: ./project.sh doctor || true
+
+      - name: SDK bsd header link
+        working-directory: work
+        run: |
+          set -e
+          SDK=$(find . -maxdepth 8 -type d -name 'iPhoneOS*.sdk' | head -1)
+          echo "SDK=$SDK"
+          ls /usr/include/bsd | head -5 || true
+          mkdir -p "$SDK/usr/include"
+          ln -sfn /usr/include/bsd "$SDK/usr/include/bsd"
+          ls "$SDK/usr/include/bsd" | head -5
+
+      - name: Build kernel
+        working-directory: work
+        run: |
+          ./project.sh build kernel -j 3 || ./project.sh build kernel -j 3
+          ./project.sh verify kernel || true
+
+      - name: Build complete
+        working-directory: work
+        run: |
+          ./project.sh build complete -j 3 --ipsw firmware/inputs/iPad_10.2_18.7.10_22H374_Restore.ipsw || true
+
+      - name: Package boot image
+        working-directory: work
+        run: |
+          ./project.sh build --help || true
+          ./project.sh --help || true
+          ./project.sh build --help
+          ./project.sh build edk2 -j 3 || true
+          ./project.sh build boot -j 3 || true
+          ./project.sh package || true
+          find build -name '*.img' -printf '%s %p\n' | sort -rn | head -20 || true
+
+      - name: Collect outputs
+        if: always()
+        working-directory: work
+        run: |
+          mkdir -p /tmp/out
+          find build -maxdepth 6 -type f \( -name "*.img" -o -name "*.efi" -o -name "mach.development.sdm835*" -o -name "*.json" \) -size -2G -exec cp --parents {} /tmp/out/ \; || true
+          du -sh /tmp/out || true
+
+      - name: Upload outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xnuproject-out
+          path: /tmp/out
+          if-no-files-found: warn
+          compression-level: 0
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xnuproject-logs
+          path: |
+            work/build/**/logs
+            work/.project.json
+          if-no-files-found: warn
+
+

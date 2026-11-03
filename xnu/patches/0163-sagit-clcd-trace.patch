@@ -1,0 +1,45 @@
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -306,8 +306,10 @@
+ 	fOffY = (int32_t)(fLogicalH - fHeight) / 2;
+ 	fLock = IOLockAlloc();
+ 	fClients = OSArray::withCapacity(4);
++	printf("SAGIT: CLCD surface create begin (sagit)\n");
+ 	fSurface = sweet_surface_create_physical(fPhys, fWidth, fHeight, fRowBytes, SWEET_FB_FORMAT_BGRA);
+ 	fPixels = fSurface != NULL ? fSurface->kernelAddress() : 0;
++	printf("SAGIT: CLCD surface pixels=0x%lx (sagit)\n", (unsigned long)fPixels);
+ 	fWorkLoop = IOWorkLoop::workLoop();
+ 	if (fLock == NULL || fClients == NULL || fPixels == 0 || fWorkLoop == NULL) {
+ 		IOLog("SWEET FB: setup failed\n");
+@@ -315,6 +317,7 @@
+ 		OSSafeReleaseNULL(fWorkLoop);
+ 		return false;
+ 	}
++	printf("SAGIT: CLCD vsync create begin (sagit)\n");
+ 	fVsync = IOTimerEventSource::timerEventSource(this, &AppleCLCD::vsyncFired);
+ 	if (fVsync == NULL || fWorkLoop->addEventSource(fVsync) != kIOReturnSuccess) {
+ 		IOLog("SWEET FB: no vsync timer\n");
+@@ -325,6 +328,7 @@
+ 	fCtl0 = NULL;
+ 	fDsi = NULL;
+ 	printf("SAGIT: CLCD topaz MDP/DSI maps skipped (sagit)\n");
++	printf("SAGIT: CLCD dsibuf alloc begin (sagit)\n");
+ 	fDsiBuf = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+ 	    kIODirectionInOut | kIOMemoryPhysicallyContiguous, page_size, 0x00000000fffff000ull);
+ 	fDsiBufPhys = fDsiBuf ? fDsiBuf->getPhysicalSegment(0, NULL, kIOMemoryMapperNone) : 0;
+@@ -332,6 +336,7 @@
+ 	fBlLevel = 0x133;                       /* panel init level (stock DT) */
+ 	fBlSent = ~0u;
+ 	fBlCall = thread_call_allocate(&AppleCLCD::blWork, this);
++	printf("SAGIT: CLCD dsibuf and bl timer ready (sagit)\n");
+ 	if (fDsi != NULL) {
+ 		IOLog("SWEET FB: DSI0 ctrl %#x, brightness via DCS 0x51\n", *(volatile uint32_t *)(fDsi + 0x004));
+ 		setProperty("IOMFBBrightnessLevel", (unsigned long long)(200u << 16), 32);
+@@ -423,6 +428,7 @@
+ 	setProperty("external", false);
+ 	setProperty("DisplayPipePlaneBaseAlignment", 64ULL, 32);
+ 	registerService();
++	printf("SAGIT: CLCD registered IOFB service (sagit)\n");
+ 	IOLog("SWEET FB: AppleCLCD %ux%u stride %u at 0x%llx, default surface %u, presented as %ux%u\n",
+ 	    fWidth, fHeight, fRowBytes, fPhys, fSurface->id, fLogicalW, fLogicalH);
+ 	return true;

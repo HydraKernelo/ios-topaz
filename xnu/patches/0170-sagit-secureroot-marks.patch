@@ -1,0 +1,20 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -908,7 +908,9 @@
+ 		printf("cannot mount root, errno = %d\n", err);
+ 	}
+ 
++	printf("SAGIT: secure bsd root begin (sagit)\n");
+ 	IOSecureBSDRoot(rootdevice);
++	printf("SAGIT: secure bsd root done (sagit)\n");
+ 
+ 	printf("SAGIT: root mounted\n");
+ 	mountlist.tqh_first->mnt_flag |= MNT_ROOTFS;
+@@ -923,6 +925,7 @@
+ 
+ 	lck_rw_lock_exclusive(&rootvnode_rw_lock);
+ 	set_rootvnode(init_rootvnode);
++	printf("SAGIT: rootvnode set (sagit)\n");
+ 	lck_rw_unlock_exclusive(&rootvnode_rw_lock);
+ 	init_rootvnode = NULLVP;  /* use rootvnode after this point */
+ 

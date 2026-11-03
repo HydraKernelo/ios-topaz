@@ -1,0 +1,23 @@
+--- a/bsd/dev/sweet_ufs.c
++++ b/bsd/dev/sweet_ufs.c
+@@ -461,7 +461,9 @@
+ 		uint32_t want_b = (uint32_t)MIN(len - done, (uint64_t)(BOUNCE_SIZE - skip));
+ 		uint32_t blocks = (skip + want_b + UFS_BLOCK - 1) / UFS_BLOCK;
+ 		su.lun = part_cache[slot].lun;
+-		error = ufs_read_blocks(part_cache[slot].first + pos / UFS_BLOCK, blocks);
++		printf("SAGIT: ufs read_blocks enter (sagit)\n");
++	error = ufs_read_blocks(part_cache[slot].first + pos / UFS_BLOCK, blocks);
++	printf("SAGIT: ufs read_blocks returned %d (sagit)\n", error);
+ 		if (!error) {
+ 			memcpy((uint8_t *)dst + done, (const uint8_t *)(su.dma + DMA_BOUNCE) + skip, want_b);
+ 			done += want_b;
+@@ -475,7 +477,9 @@
+ static int
+ ufs_take_over_host(void)
+ {
++	printf("SAGIT: ufs before first MMIO (sagit)\n");
+ 	uint32_t hce = ufs_rd(REG_HCE), hcs = ufs_rd(REG_HCS);
++	printf("SAGIT: ufs host regs hce=0x%x hcs=0x%x (sagit)\n", hce, hcs);
+ 	if (!(hce & 1) || !(hcs & HCS_DP) || !(hcs & HCS_UTRLRDY)) {
+ 		printf("SWEET UFS: host not ready (hce 0x%x hcs 0x%x)\n", hce, hcs);
+ 		return ENXIO;

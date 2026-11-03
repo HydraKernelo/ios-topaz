@@ -11,13 +11,25 @@
 #include "mmu.h"
 #include "loader.h"
 #include "ufs.h"
+#include "dbg.h"
 
+#if defined(PLATFORM_SAGIT)
+/* Xiaomi Mi 6 (sagit / MSM8998): constants live in platforms/sagit/platform_sagit.h */
+#include "platform_sagit.h"
+#define IMEM_RESTART_REASON	SAGIT_IMEM_RESTART_REASON
+#define RESTART_BOOTLOADER	SAGIT_RESTART_BOOTLOADER
+#define PSHOLD			SAGIT_PSHOLD
+
+#define GICD_BASE		SAGIT_GICD_BASE
+#define GICR_BASE		SAGIT_GICR_BASE
+#else
 #define IMEM_RESTART_REASON	0x0c12565cUL	/* qcom,msm-imem@c125000 restart_reason@65c */
 #define RESTART_BOOTLOADER	0x77665500U
 #define PSHOLD			0x0440b000UL
 
 #define GICD_BASE		0x0f200000UL
 #define GICR_BASE		0x0f300000UL
+#endif
 #define GICR_SIZE		0x100000UL
 #define GICR_PE_SIZE		0x20000UL
 #define GICR_TYPER		0x08
@@ -281,13 +293,20 @@ static void __attribute__((noreturn)) gold_main(uint64_t dtb)
 		 * and puts its SGIs/PPIs in Group 1; which part matters is still to
 		 * be narrowed down.
 		 */
-		test_gic();
+#if !defined(PLATFORM_SAGIT)
+		test_gic();	/* topaz diagnostics: hangs on sagit (secondary cores parked) */
+#endif
 		gold_gicr_prepare();
+#if !defined(PLATFORM_SAGIT)
+		/* SAGIT: skip topaz cpufreq - SM6225 cpufreq-hw at 0x0f523000 does not
+		 * exist on MSM8998 and touching it stalls the bus. */
 		gold_cpufreq_max();
 		uint64_t gt = speed_ticks();
 		con_hex2("SPEED", "silver=", (uint32_t)silver_ticks, "gold=", (uint32_t)gt);
+#endif
 		delay_ms(1000);
 		con_skip();
+		con_str("BOOT", "handing control to the payload");
 		con_str("LOADER", loader_boot(dtb));
 	}
 	for (;;)
@@ -507,8 +526,14 @@ void shim_main(uint64_t dtb)
 
 	/* An xnu payload in the ramdisk means: boot it (MMU stays off). */
 	stage = "loader";
+#ifdef SAGIT_DEBUG
+	dbg_crumb(4, 0x00ff00ff);
+#else
 	con_clear(RED);
+#endif
+#ifndef SAGIT_DEBUG
 	con_str("SHIM", "sweet milestone 4: xnu loader");
+#endif
 	/* topaz: xnu needs the 16K granule (TGran16 != 0); Cortex-A53 may lack it */
 	uint64_t mmfr0 = rsr("id_aa64mmfr0_el1");
 	con_hex2("MMFR0", "lo=", (uint32_t)mmfr0, "tg16=", (mmfr0 >> 20) & 0xf);
@@ -529,7 +554,12 @@ void shim_main(uint64_t dtb)
 	}
 	con_skip();
 	const char *why = loader_boot(dtb);
+	if (0) { }
+#ifdef SAGIT_DEBUG
+	dbg_crumb(5, 0x00ffffff);
+#else
 	con_str("LOADER", why);
+#endif
 	con_skip();
 
 	/* No payload: probe the internal UFS while the MMU is still off. */

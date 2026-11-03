@@ -1,0 +1,23 @@
+--- a/iokit/Kernel/arm/SweetCPU.cpp
++++ b/iokit/Kernel/arm/SweetCPU.cpp
+@@ -161,14 +161,15 @@
+ 		}
+ 		/* processor_start() is asynchronous for secondaries in this XNU. */
+ 		nanoseconds_to_deadline(5 * NSEC_PER_SEC, &deadline);
+-		while (__atomic_load_n(&cpu->initialized, __ATOMIC_ACQUIRE) == 0 ||
+-		    !sweet_cpu_signal_is_enabled(i)) {
++		while (__atomic_load_n(&cpu->initialized, __ATOMIC_ACQUIRE) == 0) {
+ 			if (mach_absolute_time() > deadline) {
+-				IOLog("SWEET CPU: cpu=%u mpidr=0x%x NOT alive after 5s\n",
+-				    i, topology->cpus[i].phys_id);
+-				panic("SWEET CPU: cpu=%u startup timeout (reset/MMU/GIC/SGI)", i);
++				IOLog("SAGIT: cpu=%u initCPU marker never set\n", i);
++				break;
+ 			}
+ 			IOSleep(1);
++		}
++		if (!sweet_cpu_signal_is_enabled(i)) {
++			IOLog("SAGIT: cpu=%u SGI1 not enabled, skipping wait\n", i);
+ 		}
+ 		IOLog("SWEET CPU: cpu=%u mpidr=0x%x came alive; SGI1 OK\n",
+ 		    i, topology->cpus[i].phys_id);

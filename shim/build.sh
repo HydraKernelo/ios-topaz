@@ -7,6 +7,15 @@ cd "$(dirname "$0")"
 CC=aarch64-linux-gnu-gcc
 OBJCOPY=aarch64-linux-gnu-objcopy
 CFLAGS="-O2 -ffreestanding -nostdlib -fno-pic -mgeneral-regs-only -mstrict-align -fno-stack-protector -Wall -Wextra"
+# PLATFORM=sagit builds the Xiaomi Mi 6 (MSM8998) variant of the same shim.
+PLATFORM=${PLATFORM:-topaz}
+if [ "$PLATFORM" = "sagit" ]; then
+	CFLAGS="$CFLAGS -DPLATFORM_SAGIT=1 -I../platforms/sagit"
+	if [ -n "${SAGIT_DEBUG:-}" ]; then CFLAGS="$CFLAGS -DSAGIT_DEBUG"; echo "debug breadcrumbs: on" >&2; fi
+	echo "platform: sagit (MSM8998)" >&2
+else
+	echo "platform: $PLATFORM" >&2
+fi
 mkdir -p out
 for f in start.S shim.c console.c mmu.c fdt.c loader.c ufs.c; do
 	$CC $CFLAGS -c $f -o out/${f%.*}.o
@@ -33,9 +42,18 @@ if [ -n "${1:-}" ]; then
 else
 	(cd out && rm -rf rd && mkdir rd && cd rd && find . | cpio -o -H newc --quiet | gzip -9 > ../ramdisk.bin)
 fi
-${MKBOOTIMG:-python3 /home/makr/work/topaz/mkbootimg_src/mkbootimg.py} --header_version 4 --kernel out/Image --ramdisk out/ramdisk.bin \
-	--os_version 13.0.0 --os_patch_level 2025-01 \
-	--cmdline "console=null" -o out/shim-boot.img
+if [ -n "${MKBOOTIMG:-}" ] && [ -f "${MKBOOTIMG}" ]; then
+	"$MKBOOTIMG" --header_version 4 --kernel out/Image --ramdisk out/ramdisk.bin \
+		--os_version 13.0.0 --os_patch_level 2025-01 \
+		--cmdline "console=null" -o out/shim-boot.img
+else
+	echo "warning: set MKBOOTIMG=/path/to/mkbootimg.py to wrap out/Image into out/shim-boot.img" >&2
+fi
 # Host render of the console layout.
 gcc -O1 -Wall -o out/host_test console.c host_test.c && ./out/host_test
-ls -l out/Image out/shim-boot.img
+ls -l out/Image
+if [ -f out/shim-boot.img ]; then
+	ls -l out/shim-boot.img
+else
+	echo "note: out/Image built without a boot-image wrapper (MKBOOTIMG unset); CI uploads out/Image" >&2
+fi

@@ -1,0 +1,22 @@
+--- a/iokit/bsddev/IOKitBSDInit.cpp
++++ b/iokit/bsddev/IOKitBSDInit.cpp
+@@ -1044,14 +1044,19 @@
+ 
+ 	matching = IOService::serviceMatching("IOPlatformExpert");
+ 	assert(matching);
++	printf("SAGIT: secureroot matching=%p (sagit)\n", (void *)matching);
+ 	pe = (IOPlatformExpert *) IOService::waitForMatchingService(matching, 30ULL * kSecondScale);
++	printf("SAGIT: secureroot pe=%p (sagit)\n", (void *)pe);
+ 	matching->release();
+ 	assert(pe);
++	if (pe == NULL) { printf("SAGIT: secureroot no platform expert, skipping (sagit)\n"); return; }
+ 	// Returns kIOReturnNotPrivileged is the root device is not secure.
+ 	// Returns kIOReturnUnsupported if "SecureRootName" is not implemented.
+ 	result = pe->callPlatformFunction(functionName, false, (void *)rootName, (void *)NULL, (void *)NULL, (void *)NULL);
++	printf("SAGIT: secureroot calling SecureRootName (sagit)\n");
+ 	functionName->release();
+ 	OSSafeReleaseNULL(pe);
++	printf("SAGIT: secureroot result=0x%x (sagit)\n", result);
+ 
+ 	if (result == kIOReturnNotPrivileged) {
+ 		mdevremoveall();

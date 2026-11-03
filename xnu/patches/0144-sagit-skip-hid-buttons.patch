@@ -1,0 +1,20 @@
+--- a/iokit/Kernel/arm/hid/SweetHID.cpp
++++ b/iokit/Kernel/arm/hid/SweetHID.cpp
+@@ -385,15 +385,8 @@
+ 		return false;
+ 	}
+ 	IOLog("SAGIT: buttons start (sagit)\n");
+-	if (PE_parse_boot_argn("sweethidtest", &fTestSecs, sizeof(fTestSecs)) && fTestSecs) {
+-		fTest = IOTimerEventSource::timerEventSource(this, &SweetHIDButtons::testFired);
+-		if (fTest && _hidWorkLoop->addEventSource(fTest) == kIOReturnSuccess) {
+-			fTest->setTimeoutMS(fTestSecs * 1000);
+-		}
+-	}
+-	gSweetButtons = this;
+-	registerService();
+-	IOLog("SWEET HID: buttons registered (test every %u s)\n", fTestSecs);
++	/* SAGIT: buttons registration disabled for Mi 6 bring-up */
++	IOLog("SAGIT: buttons skipping registration (sagit)\n");
+ 	return true;
+ }
+ 

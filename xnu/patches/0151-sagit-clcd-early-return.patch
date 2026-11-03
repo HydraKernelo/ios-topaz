@@ -1,0 +1,9 @@
+diff --git a/iokit/Kernel/arm/SweetFramebuffer.cpp b/iokit/Kernel/arm/SweetFramebuffer.cpp
+--- a/iokit/Kernel/arm/SweetFramebuffer.cpp
++++ b/iokit/Kernel/arm/SweetFramebuffer.cpp
+@@ -276,1 +276,5 @@
+ 	printf("SAGIT: CLCD console acquired (sagit)\n");
++	/* SAGIT: SM6225 MDP/DSI at 0x05e0xxxx does not exist on msm8998. Keep the console
++	 * and return before touching those registers. */
++	printf("SAGIT: CLCD early return, topaz MDP/DSI skipped (sagit)\n");
++	return true;

@@ -2,6 +2,8 @@
  * sweet boot shim entry: arm64 Linux Image header so Qualcomm ABL treats
  * us like a kernel. ABL enters at EL1, MMU/D-cache off, x0 = DTB pointer.
  */
+#include "dbg.h"
+
 	.section .text.head, "ax"
 	.globl _head
 _head:
@@ -19,13 +21,16 @@ _head:
 	.text
 	.globl _start
 _start:
+	DBG_C 0, 0x00ff0000
 	msr	daifset, #0xf
 	mov	x19, x0			/* DTB pointer from ABL */
 	msr	spsel, #1
+	DBG_C 1, 0x00ff8000
 	adr	x1, _stack_top
 	mov	sp, x1
 	adr	x1, vectors
 	msr	vbar_el1, x1
+	DBG_C 2, 0x00ffff00
 	isb
 	/* zero .bss */
 	adr	x1, _bss_start
@@ -34,7 +39,8 @@ _start:
 	b.hs	2f
 	str	xzr, [x1], #8
 	b	1b
-2:	mov	x0, x19
+2:	DBG_C 3, 0x0000ff00
+	mov	x0, x19
 	bl	shim_main
 3:	wfe
 	b	3b

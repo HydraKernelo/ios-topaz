@@ -1,0 +1,48 @@
+--- a/bsd/kern/bsd_init.c
++++ b/bsd/kern/bsd_init.c
+@@ -505,11 +505,13 @@
+ 
+ #if CONFIG_DEV_KMEM
+ 	bsd_init_kprintf("calling dev_kmem_init\n");
++	printf("SAGIT: stepA dev_kmem\n");
+ 	dev_kmem_init();
+ #endif
+ 
+ 	/* Initialize kauth subsystem before instancing the first credential */
+ 	bsd_init_kprintf("calling kauth_init\n");
++	printf("SAGIT: stepB kauth\n");
+ 	kauth_init();
+ 
+ 	/* kernel_task->proc = kernproc; */
+@@ -712,6 +714,7 @@
+ 
+ #if SOCKETS
+ 	/* Initialize per-CPU cache allocator */
++	printf("SAGIT: stepC mcache\n");
+ 	mcache_init();
+ 
+ 	/* Initialize mbuf's. */
+@@ -792,6 +795,7 @@
+ #if CONFIG_MEMORYSTATUS
+ 	/* Initialize kernel memory status notifications */
+ 	bsd_init_kprintf("calling memorystatus_init\n");
++	printf("SAGIT: stepE memorystatus\n");
+ 	memorystatus_init();
+ #endif /* CONFIG_MEMORYSTATUS */
+ 
+@@ -799,6 +803,7 @@
+ 	sysctl_mib_init();
+ 
+ 	bsd_init_kprintf("calling bsd_autoconf\n");
++	printf("SAGIT: stepD autoconf\n");
+ 	bsd_autoconf();
+ 
+ #if CONFIG_DTRACE
+@@ -867,6 +872,7 @@
+ #endif /* NETWORKING */
+ 
+ 	bsd_init_kprintf("calling inittodr\n");
++	printf("SAGIT: stepF inittodr\n");
+ 	inittodr(0);
+ 
+ 	/* Mount the root file system. */

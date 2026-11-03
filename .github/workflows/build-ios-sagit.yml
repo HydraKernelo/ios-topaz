@@ -1,4 +1,4 @@
-name: build-ios-sagit
+name: build-ios-sagit-v3
 
 on:
   workflow_dispatch:
@@ -15,26 +15,83 @@ jobs:
 
       - name: Install host dependencies
         run: |
+          wget -qO- https://apt.llvm.org/llvm.sh | sudo bash -s -- 23
+          sudo apt-get install -y llvm-23-dev clang-23 lld-23 llvm-23
+          sudo ln -sf /usr/bin/llvm-config-23 /usr/local/bin/llvm-config
+          sudo ln -sf /usr/bin/llvm-as-23 /usr/local/bin/llvm-as
+          sudo ln -sf /usr/bin/clang-23 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/clang++-23 /usr/local/bin/clang++
+          llvm-config --version || true
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential cmake ninja-build git curl wget unzip zip \
             flex bison m4 autoconf automake libtool patch perl python3 python3-pip python3-venv pkg-config \
             device-tree-compiler libfuse3-dev zlib1g-dev libfdt-dev libssl-dev libxml2-dev liblzma-dev libbz2-dev \
             libtinyxml2-dev gcc-aarch64-linux-gnu g++-aarch64-linux-gnu iasl nasm mtools dosfstools gdisk \
-            clang lld llvm llvm-dev libc++-dev libc++abi-dev uuid-dev
-          sudo apt-get install -y -qq libcapstone-dev || echo "no capstone dev pkg"
+            clang lld llvm llvm-dev libc++-dev libc++abi-dev uuid-dev gettext
+          sudo apt-get install -y -qq libcapstone-dev libbsd-dev libdrm-dev gcc-aarch64-linux-gnu gcc-12-aarch64-linux-gnu acpica-tools mtools nasm uuid-dev || echo "no capstone dev pkg"
           python3 -m pip install --user --break-system-packages capstone keystone-engine || true
           sudo ln -sf /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-none-linux-gnu-gcc || true
           curl -LsSf https://astral.sh/uv/install.sh | sh || true
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          which msgfmt || true
           clang --version | head -2
-          aarch64-linux-gnu-gcc --version | head -1
 
-      - name: Clone ios_sagit
+      - name: Clone ios_sagit (pinned)
         run: |
-          git clone --depth 1 https://github.com/MC-XiaoXiao/ios_sagit.git work
+          git init work
           cd work
-          git log --oneline -3
-          ls
+          git remote add origin https://github.com/MC-XiaoXiao/ios_sagit.git
+          git fetch --depth 1 origin 8016626960c87bf02e5eb88e71e90181bf42417d
+          git checkout FETCH_HEAD
+          git log --oneline -1
+
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            work/tools/cache
+            work/tools/src
+            work/tools/prefix
+          key: ios-sagit-tools-v1
+
+      - name: Patch repo toolchain for Linux clang
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path('scripts/build-bridge.py')
+          if not p.exists():
+              print('build-bridge.py missing, skip')
+              raise SystemExit(0)
+          s = p.read_text()
+          if 'microsoft-static-assert' not in s:
+              s = s.replace("'-Werror',", "'-Werror', '-Wno-unknown-warning-option', '-Wno-microsoft-static-assert',", 1)
+              p.write_text(s)
+              print('patched bridge flags')
+          else:
+              print('already patched')
+          PY
+
+      - name: Patch repo toolchain for Linux clang
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path('scripts/toolchain.py')
+          if not p.exists():
+              print('toolchain.py missing, skip')
+              raise SystemExit(0)
+          s = p.read_text()
+          old = "'-fc++-static-destructors=none'"
+          if old in s:
+              s = s.replace(old + ",", "").replace(old, "'-fno-c++-static-destructors'")
+              p.write_text(s)
+              print('patched toolchain.py flag')
+          else:
+              print('flag already absent')
+          PY
 
       - name: Doctor
         working-directory: work
@@ -42,42 +99,247 @@ jobs:
 
       - name: Bootstrap (downloads SDK/tools)
         working-directory: work
-        timeout-minutes: 200
+        timeout-minutes: 220
         continue-on-error: true
         run: |
           make bootstrap JOBS=2 2>&1 | tee ../bootstrap.log
           echo "=== bootstrap finished ==="
 
-      - name: Inspect bootstrap results
-        if: always()
+      - name: Inspect SDK zip members
         working-directory: work
         run: |
-          ls -la build 2>/dev/null || true
-          ls -la build/sdk 2>/dev/null || true
-          for f in build/*.log; do echo "--- $f"; tail -40 "$f"; done 2>/dev/null || true
+          python3 - <<'PY'
+          import pathlib, zipfile
+          zips = [q for q in (pathlib.Path('tools') / 'cache').glob('*.zip') if 'sdk' in q.name.lower()]
+          print('zips:', zips)
+          if not zips:
+              raise SystemExit('no sdk zip')
+          z = zipfile.ZipFile(zips[0])
+          names = z.namelist()
+          print('members:', len(names))
+          for key in ('usr/include/bsd', 'bsd/stdlib.h', 'usr/include/', 'SDKSettings.plist'):
+              hits = [n for n in names if key in n]
+              print(key, '->', len(hits), hits[:5])
+          dirs = sorted({n.rsplit('/', 2)[1] for n in names if n.count('/') >= 2})
+          print('usr/include subdirs sample:', [d for d in dirs if d and d not in ('Developer', 'usr')][:30])
+          PY
+
+      - name: Verify and repair SDK layout
+        working-directory: work
+        run: |
+          ls -la tools/cache 2>/dev/null | head -20 || true
+          ls -la tools/sdk 2>/dev/null || true
+          python3 - <<'PY'
+          import os, pathlib, zipfile
+          root = pathlib.Path('tools')
+          dest = root / 'sdk' / 'iPhoneOS18.6.sdk'
+          marker = dest / 'SDKSettings.plist'
+          print('dest exists:', dest.exists(), 'marker:', marker.exists())
+          if marker.exists():
+              print('marker present, but will still verify include tree below')
+          cache = root / 'cache'
+          zips = [q for q in cache.glob('*.zip') if 'sdk' in q.name.lower()]
+          if not zips:
+              raise SystemExit('NO SDK ZIP FOUND in tools/cache')
+          src = zips[0]
+          print('zip:', src, src.stat().st_size)
+          with zipfile.ZipFile(src) as z:
+              names = z.namelist()
+              print('members:', len(names))
+              print('sample:', names[:5])
+              roots = set()
+              for n in names:
+                  if n.endswith('SDKSettings.plist'):
+                      roots.add(n[:-len('/SDKSettings.plist')] if '/' in n else '')
+              print('candidate roots:', sorted(roots)[:5])
+              if not roots:
+                  raise SystemExit('no SDKSettings.plist inside zip')
+              prefix = sorted(roots, key=len)[0]
+              dest.mkdir(parents=True, exist_ok=True)
+              count = 0
+              for info in z.infolist():
+                  if prefix and not info.filename.startswith(prefix + '/'):
+                      continue
+                  rel = info.filename[len(prefix) + 1:] if prefix else info.filename
+                  if not rel:
+                      continue
+                  target = dest / rel
+                  if info.is_dir():
+                      target.mkdir(parents=True, exist_ok=True)
+                      continue
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  mode = info.external_attr >> 16
+                  if mode & 0o170000 == 0o120000:
+                      link = z.read(info).decode()
+                      if target.exists() or target.is_symlink():
+                          target.unlink()
+                      target.symlink_to(link)
+                  else:
+                      with z.open(info) as f, open(target, 'wb') as o:
+                          o.write(f.read())
+                  count += 1
+              print('extracted', count)
+          print('marker now:', marker.exists())
+          inc = dest / 'usr' / 'include'
+          print('usr/include:', inc.exists())
+          for probe in ('bsd/stdlib.h', 'sys/types.h', 'mach/mach.h'):
+              p = inc / probe
+              print(probe, p.exists())
+          print('--- include listing ---')
+          if inc.exists():
+              entries = sorted(x.name for x in inc.iterdir())[:40]
+              print('include entries:', entries)
+              bsd = inc / 'bsd'
+              print('bsd dir:', bsd.exists())
+              if bsd.exists():
+                  print('bsd entries:', sorted(x.name for x in bsd.iterdir())[:20])
+          for root, dirs, files in os.walk(dest):
+              if 'stdlib.h' in files and 'bsd' in root:
+                  print('found bsd/stdlib.h at', os.path.join(root, 'stdlib.h'))
+                  break
+          if not (inc / 'bsd' / 'stdlib.h').exists():
+              print('WARNING: usr/include/bsd/stdlib.h missing (will continue to log)')
+          PY
+
+      - name: Fill missing bsd headers from macOS SDK
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          import pathlib, subprocess
+          sdk = pathlib.Path('tools/sdk/iPhoneOS18.6.sdk')
+          bsd = sdk / 'usr' / 'include' / 'bsd'
+          bsd.mkdir(parents=True, exist_ok=True)
+          base = 'https://raw.githubusercontent.com/phracker/MacOSX-SDKs/master/MacOSX11.3.sdk/usr/include/bsd/'
+          names = ['stdlib.h', 'string.h', 'stdio.h', 'unistd.h', 'time.h', 'err.h',
+                   'sysexits.h', 'signal.h', 'resource.h', 'paths.h', 'proc.h',
+                   'uuid.h', 'libutil.h', 'queue.h', 'errno.h', 'fcntl.h', 'locale.h',
+                   'math.h', 'pthread.h', 'syslog.h', 'ttyent.h', 'fts.h', 'vis.h',
+                   'db.h', 'glob.h', 'fts_compat.h']
+          fallback = {'stdlib.h': '<stdlib.h>', 'string.h': '<string.h>', 'stdio.h': '<stdio.h>',
+                      'unistd.h': '<unistd.h>', 'time.h': '<time.h>', 'signal.h': '<signal.h>',
+                      'errno.h': '<errno.h>', 'fcntl.h': '<fcntl.h>', 'locale.h': '<locale.h>',
+                      'math.h': '<math.h>', 'pthread.h': '<pthread.h>', 'syslog.h': '<syslog.h>',
+                      'queue.h': '<sys/queue.h>', 'uuid.h': '<uuid/uuid.h>',
+                      'resource.h': '<sys/resource.h>'}
+          ok = 0
+          for name in names:
+              target = bsd / name
+              if target.exists() and target.stat().st_size > 0:
+                  ok += 1
+                  continue
+              r = subprocess.run(['curl', '-fLsS', '--max-time', '30', base + name, '-o', str(target)])
+              if r.returncode != 0:
+                  target.write_text('#pragma once\n#include ' + fallback[name] + '\n' if name in fallback else '#pragma once\n')
+              else:
+                  ok += 1
+          print('bsd headers installed:', ok, 'of', len(names))
+          print('sample:', sorted(x.name for x in bsd.iterdir())[:12])
+          k = pathlib.Path('build/sdk/iPhoneOS18.6.kernel.sdk')
+          if k.exists():
+              kb = k / 'usr' / 'include' / 'bsd'
+              kb.mkdir(parents=True, exist_ok=True)
+              for f in bsd.iterdir():
+                  (kb / f.name).write_bytes(f.read_bytes())
+              print('mirrored into build/sdk')
+          PY
+
+      - name: Prepare EDK2 cross toolchain wrappers
+        working-directory: work
+        run: |
+          BIN=build/edk2-sagit/host-bin
+          mkdir -p "$BIN"
+          for tool in as ld objcopy objdump strip addr2line nm ranlib ar gcc-ar gcc-nm gcc-ranlib; do
+            src=$(command -v aarch64-linux-gnu-$tool || true)
+            if [ -n "$src" ]; then ln -sf "$src" "$BIN/aarch64-none-linux-gnu-$tool"; fi
+          done
+          ls -la "$BIN" | head -30
+          ls -la "$BIN" | head -20
+
+      - name: SAGIT GIC pre-kernel init
+        working-directory: work
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path('boot/bridge/uefi.c')
+          s = p.read_text()
+          if 'sagit_gic_setup' in s:
+              print('already patched')
+              raise SystemExit(0)
+          call = '    bridge_enter(ba, arena + k.entry - k.virt);'
+          if call not in s:
+              raise SystemExit('call site not found')
+          block = (
+              '    {\n'
+              '        volatile unsigned *gicd = (volatile unsigned *)0x17a00000ULL;\n'
+              '        unsigned ctlr = *gicd & ~3u;\n'
+              '        *gicd = ctlr;\n'
+              '        for (unsigned i = 0; i < 200000 && (*gicd & 0x80000000u); i++) { }\n'
+              '        *gicd = ctlr | 0x10u;\n'
+              '        for (unsigned i = 0; i < 200000 && (*gicd & 0x80000000u); i++) { }\n'
+              '        *gicd = ctlr | 0x12u;\n'
+              '        bridge_puts("[SAGIT] GICD_CTLR=");\n'
+              '        bridge_hex((uint64_t)*gicd);\n'
+              '        bridge_puts("\\n");\n'
+              '    }\n'
+          )
+          s = s.replace(call, block + '    /* sagit_gic_setup */\n' + call, 1)
+          p.write_text(s)
+          print('patched GIC setup into bridge')
+          PY
+
+      - name: Prepare pinned EDK2 sources
+        working-directory: work
+        run: |
+          python3 scripts/prepare-edk2-sagit.py
+          ls -la boot/edk2-msm8998 | head -20
+          test -d boot/edk2-msm8998/Common/edk2/MdePkg/Include
+          echo 'EDK2 sources ready'
 
       - name: Kernel + drivers + bridge
         working-directory: work
-        timeout-minutes: 150
-        continue-on-error: true
+        timeout-minutes: 200
         run: |
-          make collect-sdm835 JOBS=2 || true
-          make build TARGET=SDM835 JOBS=2 || true
-          make drivers JOBS=2 || true
-          make bridge JOBS=2 || true
-          make edk2-sagit JOBS=2 || true
-          make boot-image JOBS=2 || true
+          set -o pipefail
+          rm -rf build/sdk/iPhoneOS18.6.kernel.sdk build/.headers-installed-sdm835 build/headers.log || true
+          make collect-sdm835 JOBS=2 2>&1 | tail -5 || true
+          make build TARGET=SDM835 JOBS=2 2>&1 | tee ../kernel.log | tail -40
+          make drivers JOBS=2 2>&1 | tee ../drivers.log | tail -20 || true
+          make bridge JOBS=2 2>&1 | tee ../bridge.log | tail -20 || true
+          make edk2-sagit JOBS=2 2>&1 | tee ../edk2.log | tail -20 || true
+          make boot-image JOBS=2 2>&1 | tee ../bootimage.log | tail -20 || true
+          ls -la build/boot 2>/dev/null || true
           find build -maxdepth 4 -type f -size +500k -printf '%s %p\n' 2>/dev/null | sort -n | tail -25
+
+      - name: Summarize
+        if: always()
+        working-directory: work
+        run: |
+          echo "== boot dir =="; ls -la build/boot 2>/dev/null || true
+          echo "== kernel log tail =="; tail -30 ../kernel.log 2>/dev/null || true
+          echo "== errors =="; grep -n "error:" ../kernel.log ../drivers.log ../bridge.log ../edk2.log ../bootimage.log 2>/dev/null | head -20 || true
+
+      - name: Upload boot image only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-sagit-boot-only
+          path: work/build/boot/boot-sagit.img
+          if-no-files-found: warn
+          compression-level: 0
 
       - name: Upload logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-sagit-logs
+          name: ios-sagit-logs-v3
           path: |
             doctor.log
             bootstrap.log
-            work/build/*.log
+            kernel.log
+            drivers.log
+            bridge.log
+            edk2.log
+            bootimage.log
           if-no-files-found: warn
           retention-days: 3
 
@@ -85,7 +347,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-sagit-build
+          name: ios-sagit-build-v3
           path: work/build
           if-no-files-found: warn
           retention-days: 3

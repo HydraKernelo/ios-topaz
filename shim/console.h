@@ -1,10 +1,19 @@
 #pragma once
 #include <stdint.h>
 
+#if defined(PLATFORM_SAGIT)
+/* Xiaomi Mi 6: ABL simple-framebuffer@9d400000 (see platforms/sagit) */
+#include "platform_sagit.h"
+#define FB_BASE		SAGIT_FB_BASE
+#define FB_W		SAGIT_FB_WIDTH
+#define FB_H		SAGIT_FB_HEIGHT
+#define FB_STRIDE	SAGIT_FB_STRIDE
+#else
 #define FB_BASE		0x5c000000UL	/* reserved-memory cont_splash_region */
 #define FB_W		1080
 #define FB_H		2400
 #define FB_STRIDE	(FB_W * 4)	/* a8r8g8b8, matches mainline simplefb */
+#endif
 
 #define RED	0xffff0000U
 #define BLUE	0xff0000a0U
